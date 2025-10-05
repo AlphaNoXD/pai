@@ -1,4 +1,4 @@
-// CORRECTED File: api/proxy.js
+// FINAL CORRECTED File: api/proxy.js
 
 // Helper function for Chat
 async function handleChat(apiKey, history) {
@@ -23,49 +23,38 @@ async function handleChat(apiKey, history) {
 // Helper function for Image Generation
 async function handleImageGeneration(apiKey, projectId, prompt) {
     const fetch = (await import('node-fetch')).default;
-    // This is the correct Vertex AI endpoint for API key-based requests
     const apiUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagegeneration@006:predict`;
+    
+    // We construct the full URL with the API key as a query parameter.
+    const fullApiUrlWithKey = `${apiUrl}?key=${apiKey}`;
 
-    const response = await fetch(apiUrl, {
+    const response = await fetch(fullApiUrlWithKey, {
         method: 'POST',
         headers: {
-            // For this specific endpoint, the API key is passed in the URL, not as a Bearer token
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            instances: [{ prompt: prompt }],
-            parameters: { sampleCount: 1 }
+            instances: [{ "prompt": prompt }],
+            parameters: { "sampleCount": 1 }
         }),
-    // We append the API key here for this type of request
-    }, { headers: { 'X-Goog-Api-Key': apiKey } });
+    });
 
-     // This is a more complex way to call fetch that is sometimes needed for Google Cloud auth.
-     // We will try a simpler way first. The above code is commented out as it is more complex.
-     // The following is a simpler, more direct way.
-     const directApiResponse = await fetch(`${apiUrl}?key=${apiKey}`, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-             instances: [{ prompt: prompt }],
-             parameters: { sampleCount: 1 }
-         }),
-     });
-
-
-    if (!directApiResponse.ok) {
-        const errorText = await directApiResponse.text();
-        // Log the detailed error to Vercel for debugging
-        console.error("Image Generation Failed:", errorText);
-        throw new Error(`Image API Error: ${errorText}`);
+    // This block will now catch any non-successful response and prevent hanging.
+    if (!response.ok) {
+        const errorText = await response.text();
+        // This makes the real error from Google visible on your website.
+        throw new Error(`Image API returned status ${response.status}: ${errorText}`);
     }
 
-    const data = await directApiResponse.json();
-    if (!data.predictions || data.predictions.length === 0) {
-        throw new Error('API returned no predictions.');
+    const data = await response.json();
+
+    if (!data.predictions || data.predictions.length === 0 || !data.predictions[0].bytesBase64Encoded) {
+        // This handles cases where Google says "OK" but sends no image.
+        throw new Error('Image API response was successful but contained no image data.');
     }
-    return data.predictions[0]?.bytesBase64Encoded;
+
+    return data.predictions[0].bytesBase64Encoded;
 }
-
 
 // Main handler for all requests
 export default async function handler(request, response) {
@@ -86,17 +75,13 @@ export default async function handler(request, response) {
             if (!prompt) return response.status(400).json({ error: 'Image prompt is missing.' });
             
             result = { response: await handleImageGeneration(apiKey, projectId, prompt), type: 'image' };
-
-        } else { // Default to 'chat'
+        } else {
             if (!history) return response.status(400).json({ error: 'Chat history is missing.' });
-
             result = { response: await handleChat(apiKey, history), type: 'chat' };
         }
         response.status(200).json(result);
-
     } catch (error) {
-        // This will now send the real error back to the user's screen
-        console.error("Proxy Error:", error.message);
+        // The detailed error from the functions above will now be sent to the frontend.
         response.status(500).json({ error: error.message });
     }
 }
