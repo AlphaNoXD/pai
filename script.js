@@ -1,14 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // API Endpoint (make sure this is your correct Vercel URL)
     const API_ENDPOINT = 'https://pai-navy.vercel.app/api/proxy';
 
     // DOM Elements
     const chatWindow = document.querySelector('.chat-window');
     const userInput = document.querySelector('.user-input');
     const sendBtn = document.querySelector('.send-btn');
+    const imageBtn = document.querySelector('.image-btn'); // New button
     const newChatBtn = document.querySelector('.new-chat-btn');
     const historyList = document.querySelector('.history-list');
 
+    // (The rest of your script.js remains largely the same, but we will replace it all to ensure consistency)
+    // ... (Your SVG Icons, conversations, currentChatId variables) ...
     // SVG Icons for buttons
     const pinIconSVG = `<svg viewBox="0 0 24 24"><path d="M16 3.01h-2v1.98h2v-1.98zm-6 0h-2v1.98h2v-1.98zm6 12h2v2h-2v-2zm-6 0h2v2h-2v-2zm-6-6h2v2H4v-2zm16 0h-2v2h2v-2zm-10 6h2v2h-2v-2zm-6-12h2v1.98H4V3.01zM8 17h2v2H8v-2zm8-12h2v1.98h-2V5.01zm-4 14h2v2h-2v-2zM8 5.01h2v1.98H8V5.01zm4 1.98c-1.1 0-2-.9-2-2h-2v2c0 2.21 1.79 4 4 4s4-1.79 4-4v-2h-2c0 1.1-.9 2-2 2z" fill-rule="evenodd"/></svg>`;
     const deleteIconSVG = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m-6 5v6m4-6v6"/></svg>`;
@@ -17,42 +19,50 @@ document.addEventListener('DOMContentLoaded', () => {
     let conversations = JSON.parse(localStorage.getItem('aiChatHistory')) || {};
     let currentChatId = null;
 
-    // --- **THE FIX IS HERE** ---
-    // This small block of code checks for old chat formats and updates them.
     Object.keys(conversations).forEach(id => {
         if (Array.isArray(conversations[id])) {
-            console.log(`Updating old chat format for ID: ${id}`);
-            conversations[id] = {
-                messages: conversations[id], // The old array becomes the messages
-                isPinned: false              // Add the default pinned status
-            };
+            conversations[id] = { messages: conversations[id], isPinned: false };
         }
     });
-    // --- End of Fix ---
 
-
-    // --- Core Functions ---
     const saveConversations = () => {
         localStorage.setItem('aiChatHistory', JSON.stringify(conversations));
     };
-
-    const addMessage = (role, text) => {
+    
+    // UPDATED: Can now display text or images
+    const addMessage = (role, content, type = 'chat') => {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}-message`;
-        messageDiv.textContent = text;
+
+        if (type === 'image') {
+            const imageEl = document.createElement('img');
+            // The image data is base64, so we format the src attribute this way
+            imageEl.src = `data:image/png;base64,${content}`;
+            imageEl.alt = "Generated Image";
+            messageDiv.appendChild(imageEl);
+        } else {
+            messageDiv.textContent = content;
+        }
+        
         chatWindow.appendChild(messageDiv);
         chatWindow.scrollTop = chatWindow.scrollHeight;
     };
 
-    const showTypingIndicator = () => {
+    const showTypingIndicator = (text = '...') => {
         const indicator = document.createElement('div');
         indicator.className = 'message typing-indicator';
-        indicator.innerHTML = '<span></span><span></span><span></span>';
+        if (text !== '...') {
+             indicator.textContent = text;
+        } else {
+             indicator.innerHTML = '<span></span><span></span><span></span>';
+        }
         chatWindow.appendChild(indicator);
         chatWindow.scrollTop = chatWindow.scrollHeight;
         return indicator;
     };
 
+    // (Your displayHistory, loadChat, startNewChat, pin/delete handlers remain the same)
+    // ...
     // --- History Management ---
     const displayHistory = () => {
         historyList.innerHTML = '';
@@ -99,7 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!conversations[id]) return;
         currentChatId = id;
         chatWindow.innerHTML = '';
-        conversations[id].messages.forEach(message => addMessage(message.role, message.parts[0].text));
+        // Now handles image messages too
+        conversations[id].messages.forEach(message => {
+             addMessage(message.role, message.parts[0].text, message.parts[0].type);
+        });
         displayHistory();
     };
 
@@ -135,69 +148,91 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-
-    // --- API Interaction ---
-    const sendMessage = async () => {
+    
+    // API Call for Chat
+    const sendChatMessage = async () => {
         const userText = userInput.value.trim();
         if (!userText) return;
 
-        if (!currentChatId || !conversations[currentChatId]) {
-            startNewChat();
-        }
+        if (!currentChatId || !conversations[currentChatId]) startNewChat();
         
         addMessage('user', userText);
-        conversations[currentChatId].messages.push({ role: 'user', parts: [{ text: userText }] });
+        conversations[currentChatId].messages.push({ role: 'user', parts: [{ text: userText, type: 'chat' }] });
         userInput.value = '';
-
         const typingIndicator = showTypingIndicator();
 
         try {
             const response = await fetch(API_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ history: conversations[currentChatId].messages })
+                body: JSON.stringify({ history: conversations[currentChatId].messages, type: 'chat' })
             });
             
             chatWindow.removeChild(typingIndicator);
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to fetch response.');
-            }
+            if (!response.ok) throw new Error((await response.json()).error);
 
             const data = await response.json();
-            const aiText = data.response;
-            
-            addMessage('model', aiText);
-            conversations[currentChatId].messages.push({ role: 'model', parts: [{ text: aiText }] });
+            addMessage('model', data.response, 'chat');
+            conversations[currentChatId].messages.push({ role: 'model', parts: [{ text: data.response, type: 'chat' }] });
             saveConversations();
             displayHistory();
-
         } catch (error) {
+            chatWindow.removeChild(typingIndicator);
             addMessage('ai', `Error: ${error.message}`);
         }
     };
 
-    // --- Event Listeners ---
-    sendBtn.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());
+    // NEW: API Call for Images
+    const sendImageRequest = async () => {
+        const userText = userInput.value.trim();
+        if (!userText) return;
+
+        if (!currentChatId || !conversations[currentChatId]) startNewChat();
+
+        addMessage('user', `Image prompt: "${userText}"`);
+        conversations[currentChatId].messages.push({ role: 'user', parts: [{ text: `Image prompt: "${userText}"`, type: 'chat' }] });
+        userInput.value = '';
+        const typingIndicator = showTypingIndicator('Generating image...');
+
+        try {
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: userText, type: 'image' })
+            });
+
+            chatWindow.removeChild(typingIndicator);
+            if (!response.ok) throw new Error((await response.json()).error);
+
+            const data = await response.json();
+            addMessage('model', data.response, 'image'); // The response is the base64 string
+            // Save the image data to history
+            conversations[currentChatId].messages.push({ role: 'model', parts: [{ text: data.response, type: 'image' }] });
+            saveConversations();
+            displayHistory();
+
+        } catch (error) {
+            chatWindow.removeChild(typingIndicator);
+            addMessage('ai', `Error: ${error.message}`);
+        }
+    };
+
+    // Event Listeners
+    sendBtn.addEventListener('click', sendChatMessage);
+    imageBtn.addEventListener('click', sendImageRequest); // New listener
+    userInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendChatMessage());
     newChatBtn.addEventListener('click', startNewChat);
 
     historyList.addEventListener('click', (e) => {
         const historyItem = e.target.closest('.history-item');
         if (!historyItem) return;
         const id = historyItem.dataset.id;
-        
-        if (e.target.closest('.pin-btn')) {
-            handlePinToggle(id);
-        } else if (e.target.closest('.delete-btn')) {
-            handleDeleteChat(id);
-        } else if (e.target.closest('.history-item-text')) {
-            loadChat(id);
-        }
+        if (e.target.closest('.pin-btn')) handlePinToggle(id);
+        else if (e.target.closest('.delete-btn')) handleDeleteChat(id);
+        else if (e.target.closest('.history-item-text')) loadChat(id);
     });
 
-    // --- Initialization ---
+    // Initialization
     const savedIds = Object.keys(conversations);
     if (savedIds.length > 0) {
         const sortedIds = savedIds.sort((a, b) => {
