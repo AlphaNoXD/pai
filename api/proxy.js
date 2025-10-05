@@ -18,8 +18,8 @@ export default async function handler(request, response) {
   try {
     const fetch = (await import('node-fetch')).default;
     
-    // This is the URL for the new Gemini 1.5 Pro model
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${GEMINI_API_KEY}`;
+   // The only change is in the model name right after /models/
+const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
     
     const apiResponse = await fetch(apiUrl, {
       method: 'POST',
@@ -45,4 +45,5 @@ export default async function handler(request, response) {
   } catch (error) {
     response.status(500).json({ error: error.message });
   }
+
 }
