@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // IMPORTANT: Replace this with the URL of your deployed serverless function
     // This is the secure way to handle your API key.
-    const API_ENDPOINT = 'YOUR_SERVERLESS_FUNCTION_URL';
+    const API_ENDPOINT = 'https://pai-navy.vercel.app/api/proxy';
 
     // DOM Elements
     const chatWindow = document.querySelector('.chat-window');
@@ -134,4 +134,5 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         startNewChat();
     }
+
 });
