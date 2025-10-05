@@ -1,4 +1,4 @@
-// FINAL CORRECTED File: api/proxy.js
+// FINAL STABLE VERSION: api/proxy.js
 
 // Helper function for Chat
 async function handleChat(apiKey, history) {
@@ -23,14 +23,14 @@ async function handleChat(apiKey, history) {
 // Helper function for Image Generation
 async function handleImageGeneration(apiKey, projectId, prompt) {
     const fetch = (await import('node-fetch')).default;
+    // This is the Vertex AI API endpoint
     const apiUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagegeneration@006:predict`;
-    
-    // We construct the full URL with the API key as a query parameter.
-    const fullApiUrlWithKey = `${apiUrl}?key=${apiKey}`;
 
-    const response = await fetch(fullApiUrlWithKey, {
+    // The Vertex AI API often prefers the key as a Bearer token. This is more reliable.
+    const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
+            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -39,28 +39,24 @@ async function handleImageGeneration(apiKey, projectId, prompt) {
         }),
     });
 
-    // This block will now catch any non-successful response and prevent hanging.
     if (!response.ok) {
         const errorText = await response.text();
-        // This makes the real error from Google visible on your website.
         throw new Error(`Image API returned status ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
 
     if (!data.predictions || data.predictions.length === 0 || !data.predictions[0].bytesBase64Encoded) {
-        // This handles cases where Google says "OK" but sends no image.
         throw new Error('Image API response was successful but contained no image data.');
     }
 
     return data.predictions[0].bytesBase64Encoded;
 }
 
+
 // Main handler for all requests
 export default async function handler(request, response) {
-    if (request.method !== 'POST') {
-        return response.status(405).json({ message: 'Method Not Allowed' });
-    }
+    console.log(`[LOG] Function started for type: ${request.body.type || 'chat'}`);
 
     const apiKey = process.env.GEMINI_API_KEY;
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
@@ -79,9 +75,10 @@ export default async function handler(request, response) {
             if (!history) return response.status(400).json({ error: 'Chat history is missing.' });
             result = { response: await handleChat(apiKey, history), type: 'chat' };
         }
+        console.log(`[LOG] Function completed successfully for type: ${type || 'chat'}`);
         response.status(200).json(result);
     } catch (error) {
-        // The detailed error from the functions above will now be sent to the frontend.
+        console.error(`[ERROR] An error occurred: ${error.message}`);
         response.status(500).json({ error: error.message });
     }
 }
