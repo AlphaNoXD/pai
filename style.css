@@ -48,25 +48,72 @@ body {
 .history-list {
     overflow-y: auto;
 }
+
+/* UPDATED: history-item styles for buttons */
 .history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 10px;
     margin-bottom: 8px;
     border-radius: 4px;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     border-left: 3px solid transparent;
     transition: all 0.3s;
 }
-.history-item:hover {
-    background-color: rgba(0, 217, 255, 0.05);
+
+.history-item-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    flex-grow: 1; /* Allows text to take available space */
+}
+
+.history-item-actions {
+    display: flex;
+    align-items: center;
+    opacity: 0; /* Hide buttons by default */
+    transition: opacity 0.3s;
+}
+.history-item:hover .history-item-actions {
+    opacity: 1; /* Show buttons on hover */
+}
+
+.pin-btn, .delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    margin-left: 5px;
+}
+.pin-btn svg, .delete-btn svg {
+    width: 16px;
+    height: 16px;
+    transition: fill 0.3s, stroke 0.3s;
+}
+.pin-btn svg { fill: #888; }
+.delete-btn svg { stroke: #888; }
+.pin-btn:hover svg { fill: #00d9ff; }
+.delete-btn:hover svg { stroke: #ff4d4d; }
+
+
+.history-item.active .history-item-text,
+.history-item:hover .history-item-text {
+    color: #e0e0e0;
 }
 .history-item.active {
     background-color: rgba(0, 217, 255, 0.1);
     border-left: 3px solid #00d9ff;
-    font-weight: bold;
 }
+
+/* NEW: Style for pinned items */
+.history-item.pinned {
+    border-left: 3px solid #ffd700; /* Gold color for pinned */
+}
+.history-item.pinned .pin-btn svg {
+    fill: #ffd700; /* Pinned icon is gold */
+}
+
 
 /* Main Chat Area */
 .chat-area {
