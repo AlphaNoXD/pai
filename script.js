@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // IMPORTANT: Replace this with the URL of your deployed serverless function
-    // This is the secure way to handle your API key.
+    // API Endpoint (make sure this is your correct Vercel URL)
     const API_ENDPOINT = 'https://pai-navy.vercel.app/api/proxy';
 
     // DOM Elements
@@ -9,6 +8,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendBtn = document.querySelector('.send-btn');
     const newChatBtn = document.querySelector('.new-chat-btn');
     const historyList = document.querySelector('.history-list');
+
+    // SVG Icons for buttons
+    const pinIconSVG = `<svg viewBox="0 0 24 24"><path d="M16 3.01h-2v1.98h2v-1.98zm-6 0h-2v1.98h2v-1.98zm6 12h2v2h-2v-2zm-6 0h2v2h-2v-2zm-6-6h2v2H4v-2zm16 0h-2v2h2v-2zm-10 6h2v2h-2v-2zm-6-12h2v1.98H4V3.01zM8 17h2v2H8v-2zm8-12h2v1.98h-2V5.01zm-4 14h2v2h-2v-2zM8 5.01h2v1.98H8V5.01zm4 1.98c-1.1 0-2-.9-2-2h-2v2c0 2.21 1.79 4 4 4s4-1.79 4-4v-2h-2c0 1.1-.9 2-2 2z" fill-rule="evenodd"/></svg>`;
+    const deleteIconSVG = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m-6 5v6m4-6v6"/></svg>`;
 
     // State Management
     let conversations = JSON.parse(localStorage.getItem('aiChatHistory')) || {};
@@ -24,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
         messageDiv.className = `message ${role}-message`;
         messageDiv.textContent = text;
         chatWindow.appendChild(messageDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight; // Auto-scroll to the bottom
+        chatWindow.scrollTop = chatWindow.scrollHeight;
     };
 
     const showTypingIndicator = () => {
@@ -36,21 +39,47 @@ document.addEventListener('DOMContentLoaded', () => {
         return indicator;
     };
 
-    // --- History Management ---
+    // --- History Management (UPDATED) ---
     const displayHistory = () => {
         historyList.innerHTML = '';
-        Object.keys(conversations).forEach(id => {
-            const firstUserMessage = conversations[id].find(msg => msg.role === 'user');
-            if (firstUserMessage) {
-                const historyItem = document.createElement('div');
-                historyItem.className = 'history-item';
-                historyItem.textContent = firstUserMessage.parts[0].text;
-                historyItem.dataset.id = id;
-                if (id === currentChatId) {
-                    historyItem.classList.add('active');
-                }
-                historyList.appendChild(historyItem);
-            }
+
+        // Sort conversations: pinned first, then by date (newest first)
+        const sortedIds = Object.keys(conversations).sort((a, b) => {
+            const aPinned = conversations[a].isPinned;
+            const bPinned = conversations[b].isPinned;
+            if (aPinned && !bPinned) return -1; // a comes first
+            if (!aPinned && bPinned) return 1;  // b comes first
+            return b.localeCompare(a); // Sort by date (descending)
+        });
+
+        sortedIds.forEach(id => {
+            const conversation = conversations[id];
+            const firstUserMessage = conversation.messages.find(msg => msg.role === 'user');
+            
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            historyItem.dataset.id = id;
+            if (id === currentChatId) historyItem.classList.add('active');
+            if (conversation.isPinned) historyItem.classList.add('pinned');
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'history-item-text';
+            textSpan.textContent = firstUserMessage ? firstUserMessage.parts[0].text : 'New Chat';
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'history-item-actions';
+
+            const pinBtn = document.createElement('button');
+            pinBtn.className = 'pin-btn';
+            pinBtn.innerHTML = pinIconSVG;
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.innerHTML = deleteIconSVG;
+
+            actionsDiv.append(pinBtn, deleteBtn);
+            historyItem.append(textSpan, actionsDiv);
+            historyList.appendChild(historyItem);
         });
     };
 
@@ -58,19 +87,47 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!conversations[id]) return;
         currentChatId = id;
         chatWindow.innerHTML = '';
-        conversations[id].forEach(message => addMessage(message.role, message.parts[0].text));
+        conversations[id].messages.forEach(message => addMessage(message.role, message.parts[0].text));
         displayHistory();
     };
 
     const startNewChat = () => {
         currentChatId = `chat_${Date.now()}`;
-        conversations[currentChatId] = [];
+        // NEW data structure: includes messages and pinned state
+        conversations[currentChatId] = { messages: [], isPinned: false };
         chatWindow.innerHTML = '';
+        loadChat(currentChatId); // Use loadChat to set active state correctly
+    };
+
+    // --- NEW: Pin and Delete Handlers ---
+    const handlePinToggle = (id) => {
+        if (!conversations[id]) return;
+        conversations[id].isPinned = !conversations[id].isPinned;
         saveConversations();
         displayHistory();
     };
 
-    // --- API Interaction ---
+    const handleDeleteChat = (id) => {
+        if (!conversations[id]) return;
+        if (confirm('Are you sure you want to delete this conversation?')) {
+            delete conversations[id];
+            saveConversations();
+
+            if (currentChatId === id) {
+                // If we deleted the active chat, load another one or start fresh
+                const remainingIds = Object.keys(conversations);
+                if (remainingIds.length > 0) {
+                    loadChat(remainingIds[0]);
+                } else {
+                    startNewChat();
+                }
+            } else {
+                displayHistory();
+            }
+        }
+    };
+
+    // --- API Interaction (UPDATED) ---
     const sendMessage = async () => {
         const userText = userInput.value.trim();
         if (!userText) return;
@@ -80,24 +137,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         addMessage('user', userText);
-        conversations[currentChatId].push({ role: 'user', parts: [{ text: userText }] });
+        // Update the messages array within the conversation object
+        conversations[currentChatId].messages.push({ role: 'user', parts: [{ text: userText }] });
         userInput.value = '';
 
         const typingIndicator = showTypingIndicator();
 
         try {
-            if (API_ENDPOINT === 'YOUR_SERVERLESS_FUNCTION_URL') {
-                throw new Error("API endpoint is not configured. Please follow deployment instructions.");
-            }
-            // THE FIX IS HERE: We send the entire conversation history for context.
-            // The serverless function will then add the API key and forward this to Google.
             const response = await fetch(API_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ history: conversations[currentChatId] })
+                // Send the messages array for context
+                body: JSON.stringify({ history: conversations[currentChatId].messages })
             });
             
-            chatWindow.removeChild(typingIndicator); // Remove typing indicator
+            chatWindow.removeChild(typingIndicator);
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -107,32 +161,49 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             const aiText = data.response;
             
-            addMessage('ai', aiText); // 'ai' role for styling
-            conversations[currentChatId].push({ role: 'model', parts: [{ text: aiText }] });
+            addMessage('model', aiText); // 'model' for consistency with data
+            conversations[currentChatId].messages.push({ role: 'model', parts: [{ text: aiText }] });
             saveConversations();
-            displayHistory();
+            displayHistory(); // Update history to show new first message if it's a new chat
 
         } catch (error) {
             addMessage('ai', `Error: ${error.message}`);
         }
     };
 
-    // --- Event Listeners ---
+    // --- Event Listeners (UPDATED) ---
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());
     newChatBtn.addEventListener('click', startNewChat);
+
+    // Use event delegation for pin, delete, and load
     historyList.addEventListener('click', (e) => {
-        if (e.target.classList.contains('history-item')) {
-            loadChat(e.target.dataset.id);
+        const historyItem = e.target.closest('.history-item');
+        if (!historyItem) return;
+        const id = historyItem.dataset.id;
+        
+        if (e.target.closest('.pin-btn')) {
+            handlePinToggle(id);
+        } else if (e.target.closest('.delete-btn')) {
+            handleDeleteChat(id);
+        } else if (e.target.closest('.history-item-text')) {
+            loadChat(id);
         }
     });
 
     // --- Initialization ---
     const savedIds = Object.keys(conversations);
     if (savedIds.length > 0) {
-        loadChat(savedIds[savedIds.length - 1]); // Load the most recent chat
+        // Sort to ensure we load a pinned item first if available
+        const sortedIds = savedIds.sort((a, b) => {
+            const aPinned = conversations[a].isPinned;
+            const bPinned = conversations[b].isPinned;
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
+            return b.localeCompare(a);
+        });
+        loadChat(sortedIds[0]);
     } else {
         startNewChat();
     }
-
 });
