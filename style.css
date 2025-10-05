@@ -95,6 +95,7 @@ body {
 .pin-btn:hover svg { fill: #00d9ff; }
 .delete-btn:hover svg { stroke: #ff4d4d; }
 
+
 .history-item.active {
     background-color: rgba(0, 217, 255, 0.1);
     border-left: 3px solid #00d9ff;
@@ -166,15 +167,6 @@ body {
     border-bottom-left-radius: 4px;
     border: 1px solid rgba(0, 217, 255, 0.2);
 }
-/* NEW: Style for generated images in the chat */
-.ai-message img {
-    max-width: 100%;
-    max-height: 400px;
-    border-radius: 12px;
-    /* margin-top: 10px; This might not be needed if it's the only content */
-    border: 1px solid rgba(0, 217, 255, 0.2);
-}
-
 .typing-indicator {
     align-self: flex-start;
     padding: 12px 18px;
@@ -218,9 +210,10 @@ body {
     box-shadow: 0 0 10px #00d9ff;
 }
 
-.send-btn, .image-btn { /* Apply styles to both buttons */
+.send-btn {
     padding: 0 20px;
     margin-left: 10px;
+    background-color: #00d9ff;
     color: #020a14;
     font-weight: bold;
     border: none;
@@ -229,21 +222,8 @@ body {
     font-size: 1em;
     font-family: 'Jura', sans-serif;
     transition: all 0.3s;
-    white-space: nowrap; /* Prevents text from wrapping */
-}
-
-.send-btn {
-    background-color: #00d9ff;
 }
 .send-btn:hover {
     background-color: white;
     box-shadow: 0 0 15px white;
-}
-
-.image-btn {
-    background-color: #9f70ff;
-}
-.image-btn:hover {
-    background-color: #c9b0ff;
-    box-shadow: 0 0 15px #c9b0ff;
 }
