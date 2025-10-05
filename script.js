@@ -17,6 +17,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let conversations = JSON.parse(localStorage.getItem('aiChatHistory')) || {};
     let currentChatId = null;
 
+    // --- **THE FIX IS HERE** ---
+    // This small block of code checks for old chat formats and updates them.
+    Object.keys(conversations).forEach(id => {
+        if (Array.isArray(conversations[id])) {
+            console.log(`Updating old chat format for ID: ${id}`);
+            conversations[id] = {
+                messages: conversations[id], // The old array becomes the messages
+                isPinned: false              // Add the default pinned status
+            };
+        }
+    });
+    // --- End of Fix ---
+
+
     // --- Core Functions ---
     const saveConversations = () => {
         localStorage.setItem('aiChatHistory', JSON.stringify(conversations));
@@ -39,17 +53,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return indicator;
     };
 
-    // --- History Management (UPDATED) ---
+    // --- History Management ---
     const displayHistory = () => {
         historyList.innerHTML = '';
-
-        // Sort conversations: pinned first, then by date (newest first)
         const sortedIds = Object.keys(conversations).sort((a, b) => {
             const aPinned = conversations[a].isPinned;
             const bPinned = conversations[b].isPinned;
-            if (aPinned && !bPinned) return -1; // a comes first
-            if (!aPinned && bPinned) return 1;  // b comes first
-            return b.localeCompare(a); // Sort by date (descending)
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
+            return b.localeCompare(a);
         });
 
         sortedIds.forEach(id => {
@@ -93,13 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const startNewChat = () => {
         currentChatId = `chat_${Date.now()}`;
-        // NEW data structure: includes messages and pinned state
         conversations[currentChatId] = { messages: [], isPinned: false };
         chatWindow.innerHTML = '';
-        loadChat(currentChatId); // Use loadChat to set active state correctly
+        loadChat(currentChatId);
     };
 
-    // --- NEW: Pin and Delete Handlers ---
+    // --- Pin and Delete Handlers ---
     const handlePinToggle = (id) => {
         if (!conversations[id]) return;
         conversations[id].isPinned = !conversations[id].isPinned;
@@ -112,9 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm('Are you sure you want to delete this conversation?')) {
             delete conversations[id];
             saveConversations();
-
             if (currentChatId === id) {
-                // If we deleted the active chat, load another one or start fresh
                 const remainingIds = Object.keys(conversations);
                 if (remainingIds.length > 0) {
                     loadChat(remainingIds[0]);
@@ -127,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- API Interaction (UPDATED) ---
+    // --- API Interaction ---
     const sendMessage = async () => {
         const userText = userInput.value.trim();
         if (!userText) return;
@@ -137,7 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         addMessage('user', userText);
-        // Update the messages array within the conversation object
         conversations[currentChatId].messages.push({ role: 'user', parts: [{ text: userText }] });
         userInput.value = '';
 
@@ -147,7 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(API_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Send the messages array for context
                 body: JSON.stringify({ history: conversations[currentChatId].messages })
             });
             
@@ -161,22 +168,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             const aiText = data.response;
             
-            addMessage('model', aiText); // 'model' for consistency with data
+            addMessage('model', aiText);
             conversations[currentChatId].messages.push({ role: 'model', parts: [{ text: aiText }] });
             saveConversations();
-            displayHistory(); // Update history to show new first message if it's a new chat
+            displayHistory();
 
         } catch (error) {
             addMessage('ai', `Error: ${error.message}`);
         }
     };
 
-    // --- Event Listeners (UPDATED) ---
+    // --- Event Listeners ---
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());
     newChatBtn.addEventListener('click', startNewChat);
 
-    // Use event delegation for pin, delete, and load
     historyList.addEventListener('click', (e) => {
         const historyItem = e.target.closest('.history-item');
         if (!historyItem) return;
@@ -194,7 +200,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialization ---
     const savedIds = Object.keys(conversations);
     if (savedIds.length > 0) {
-        // Sort to ensure we load a pinned item first if available
         const sortedIds = savedIds.sort((a, b) => {
             const aPinned = conversations[a].isPinned;
             const bPinned = conversations[b].isPinned;
